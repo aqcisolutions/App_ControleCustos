@@ -1,0 +1,6 @@
+{
+  "name": "MotoristaPro - Controle de Custos e Metas Diárias",
+  "description": "Sistema de gestão financeira para motoristas de aplicativo calcularem reserva diária de contas nos dias trabalhados com calendário e fechamento de turno.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
