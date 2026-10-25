@@ -14,6 +14,7 @@ import { ResetMonthModal } from './components/ResetMonthModal';
 import { AuthModal } from './components/AuthModal';
 import { BackupModal } from './components/BackupModal';
 import { MigrationModal } from './components/MigrationModal';
+import { LoginView } from './components/LoginView';
 import { Bill, WorkSchedule, DailyClosure } from './types';
 import {
   loadBills as loadLocalBills,
@@ -41,7 +42,7 @@ import {
   archiveLocalDataBeforeMigration,
 } from './services/dataService';
 import { supabase } from './services/supabase';
-import { Calendar, CheckSquare, PiggyBank, Settings, Sparkles, RotateCcw } from 'lucide-react';
+import { Calendar, CheckSquare, PiggyBank, Settings, Sparkles, RotateCcw, Car } from 'lucide-react';
 
 export default function App() {
   const [bills, setBills] = useState<Bill[]>(() => loadLocalBills());
@@ -53,6 +54,7 @@ export default function App() {
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
 
   // Cloud & Auth State
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local_only');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export default function App() {
   } | null>(null);
   const isReloadingRef = useRef(false);
   const isMigrationPendingRef = useRef(false);
+  const lastLoadedUidRef = useRef<string | null>(null);
 
   // Subscribe to sync status
   useEffect(() => {
@@ -93,11 +96,14 @@ export default function App() {
     }
   }, []);
 
-  // Supabase Auth Listener
+  // Supabase Auth Listener & Initial Session Check
   useEffect(() => {
-    if (!supabase) return;
-
     let isMounted = true;
+
+    if (!supabase) {
+      setIsAuthChecking(false);
+      return;
+    }
 
     const handleAuthUser = async (user: { id: string; email?: string | null } | null) => {
       if (!isMounted) return;
@@ -106,6 +112,12 @@ export default function App() {
         const uid = user.id;
         setUserId(uid);
         setUserEmail(user.email || null);
+
+        // Prevent duplicate simultaneous initial loads
+        if (lastLoadedUidRef.current === uid) {
+          return;
+        }
+        lastLoadedUidRef.current = uid;
 
         // Check if user already has data in Supabase (e.g. mobile or returning login)
         const cloudHasData = await checkCloudHasData(uid);
@@ -138,29 +150,54 @@ export default function App() {
           await reloadData(uid);
         }
       } else {
+        lastLoadedUidRef.current = null;
         setUserId(null);
         setUserEmail(null);
         isMigrationPendingRef.current = false;
         setIsMigrationModalOpen(false);
         setPendingMigrationSnapshot(null);
-        await reloadData();
       }
     };
 
-    // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        handleAuthUser(session.user);
-      }
-    });
+    // Check initial session without flickering dashboard
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session }, error }) => {
+        if (!isMounted) return;
+        if (error) {
+          console.warn('Erro ao verificar sessão Supabase:', error);
+        }
+        if (session?.user) {
+          await handleAuthUser(session.user);
+        } else {
+          await handleAuthUser(null);
+        }
+        if (isMounted) {
+          setIsAuthChecking(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Falha na verificação de sessão:', err);
+        if (isMounted) {
+          setIsAuthChecking(false);
+        }
+      });
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         if (session?.user) {
           await handleAuthUser(session.user);
+          if (isMounted) {
+            setIsAuthChecking(false);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         await handleAuthUser(null);
+        if (isMounted) {
+          setIsAuthChecking(false);
+        }
       }
     });
 
@@ -296,9 +333,13 @@ export default function App() {
     if (supabase) {
       await supabase.auth.signOut();
     }
+    lastLoadedUidRef.current = null;
     setUserId(null);
     setUserEmail(null);
-    await reloadData();
+    setSyncStatus('local_only');
+    setIsAuthModalOpen(false);
+    setIsMigrationModalOpen(false);
+    setPendingMigrationSnapshot(null);
   };
 
   // Handle Migration Confirmation
@@ -356,6 +397,39 @@ export default function App() {
   const totalMonthlyBills = bills.reduce((sum, b) => sum + b.amount, 0);
   const totalReserved = allBillsProgress.reduce((sum, b) => sum + b.alreadyReserved, 0);
 
+  // 1. Discrete Loading State while verifying session
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans select-none">
+        <div className="flex flex-col items-center gap-4 text-center max-w-sm animate-in fade-in duration-300">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-xl shadow-emerald-950/60 text-white ring-1 ring-emerald-400/20">
+            <Car className="w-7 h-7" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-100">MotoristaPro</h1>
+            <p className="text-xs text-slate-400 mt-1">Controle de Custos e Metas Diárias</p>
+          </div>
+          <div className="flex items-center gap-2 mt-3 px-4 py-2 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-400 shadow-inner">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Verificando acesso seguro...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated Gate: Show Login Screen
+  if (!userId) {
+    return (
+      <LoginView
+        onLoginSuccess={(email) => {
+          setUserEmail(email);
+        }}
+      />
+    );
+  }
+
+  // 3. Authenticated: Render Main Application Dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
       {/* Top Header & Navigation */}
