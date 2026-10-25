@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Calendar, DollarSign, RefreshCw, SlidersHorizontal, Info, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Edit2, Calendar, DollarSign, RefreshCw, SlidersHorizontal, Info, RotateCcw, Download, ShieldCheck } from 'lucide-react';
 import { Bill, WorkSchedule, BillCategory } from '../types';
-import { formatCurrency, WEEKDAYS_BR, formatDateBR, getTodayStr } from '../utils/formatters';
+import { formatCurrency, WEEKDAYS_BR, formatDateBR, getTodayStr, generateUUID } from '../utils/formatters';
 import { ConfirmModal } from './ConfirmModal';
 
 interface SettingsViewProps {
@@ -13,6 +13,7 @@ interface SettingsViewProps {
   onResetAllBlank: () => void;
   onClearClosures: () => void;
   onOpenResetMonthModal?: () => void;
+  onOpenBackup?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -24,6 +25,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onResetAllBlank,
   onClearClosures,
   onOpenResetMonthModal,
+  onOpenBackup,
 }) => {
   // Modal state for adding/editing a bill
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
@@ -107,7 +109,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     } else {
       // Add new
       const newBill: Bill = {
-        id: `bill-${Date.now()}`,
+        id: generateUUID(),
         description: descriptionInput.trim(),
         amount: parsedAmount,
         dueDay: clampedDueDay,
@@ -430,9 +432,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Section 3: Gestão de Dados */}
+      {/* Section 3: Gestão de Dados & Backup */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4">
-        <h3 className="text-base font-bold text-slate-200">Gerenciamento de Dados & Início de Mês</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-800">
+          <div>
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              <span>Cópia de Segurança & Backup Manual</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              Exporte seus dados em arquivo JSON ou restaure um backup a qualquer momento.
+            </p>
+          </div>
+          {onOpenBackup && (
+            <button
+              type="button"
+              onClick={onOpenBackup}
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-md shadow-emerald-500/20 cursor-pointer self-start sm:self-auto"
+            >
+              <Download className="w-4 h-4" />
+              <span>Abrir Backup / Restaurar</span>
+            </button>
+          )}
+        </div>
+
+        <h3 className="text-sm font-bold text-slate-300 pt-1">Ajustes Rápidos de Dados & Início de Mês</h3>
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"

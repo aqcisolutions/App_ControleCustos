@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, ArrowRight, ArrowLeft, Check, Calendar, DollarSign, Car, Sparkles, HelpCircle } from 'lucide-react';
 import { Bill, WorkSchedule, BillCategory } from '../types';
-import { formatCurrency, WEEKDAYS_BR } from '../utils/formatters';
+import { formatCurrency, WEEKDAYS_BR, generateUUID } from '../utils/formatters';
 
 interface SetupWizardProps {
   initialBills: Bill[];
@@ -38,7 +38,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
     if (!desc.trim() || isNaN(amount) || amount <= 0) return;
 
     const newBill: Bill = {
-      id: `bill-${Date.now()}`,
+      id: generateUUID(),
       description: desc.trim(),
       amount,
       dueDay: Math.min(31, Math.max(1, isNaN(dueDay) ? 1 : dueDay)),

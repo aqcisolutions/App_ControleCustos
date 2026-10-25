@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { CalendarView } from './components/CalendarView';
 import { DailyClosureView } from './components/DailyClosureView';
@@ -11,14 +11,14 @@ import { VaultOverview } from './components/VaultOverview';
 import { SettingsView } from './components/SettingsView';
 import { SetupWizard } from './components/SetupWizard';
 import { ResetMonthModal } from './components/ResetMonthModal';
+import { AuthModal } from './components/AuthModal';
+import { BackupModal } from './components/BackupModal';
+import { MigrationModal } from './components/MigrationModal';
 import { Bill, WorkSchedule, DailyClosure } from './types';
 import {
-  loadBills,
-  saveBills,
-  loadSchedule,
-  saveSchedule,
-  loadClosures,
-  saveClosures,
+  loadBills as loadLocalBills,
+  loadSchedule as loadLocalSchedule,
+  loadClosures as loadLocalClosures,
   loadOnboardingStatus,
   setOnboardingDone,
   resetAllData,
@@ -26,35 +26,190 @@ import {
 } from './utils/storage';
 import { getTodayStr } from './utils/formatters';
 import { calculateDaySchedule, calculateAllBillsProgress } from './utils/calculator';
+import { BackupData } from './utils/backupValidator';
+import {
+  SyncStatus,
+  subscribeSyncStatus,
+  loadAppData,
+  syncBills,
+  syncSchedule,
+  syncClosure,
+  syncDeleteClosure,
+  migrateLocalToCloud,
+  hasLocalDataToMigrate,
+  checkCloudHasData,
+  archiveLocalDataBeforeMigration,
+} from './services/dataService';
+import { supabase } from './services/supabase';
 import { Calendar, CheckSquare, PiggyBank, Settings, Sparkles, RotateCcw } from 'lucide-react';
 
 export default function App() {
-  const [bills, setBills] = useState<Bill[]>(() => loadBills());
-  const [schedule, setSchedule] = useState<WorkSchedule>(() => loadSchedule());
-  const [closures, setClosures] = useState<Record<string, DailyClosure>>(() => loadClosures());
+  const [bills, setBills] = useState<Bill[]>(() => loadLocalBills());
+  const [schedule, setSchedule] = useState<WorkSchedule>(() => loadLocalSchedule());
+  const [closures, setClosures] = useState<Record<string, DailyClosure>>(() => loadLocalClosures());
   const [activeTab, setActiveTab] = useState<'calendar' | 'closure' | 'vault' | 'settings'>('calendar');
   const [closureTargetDate, setClosureTargetDate] = useState<string>(getTodayStr());
   const [showWizard, setShowWizard] = useState<boolean>(() => !loadOnboardingStatus() && bills.length === 0);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
 
-  // Sync to localStorage
-  const updateBills = (newBills: Bill[]) => {
-    setBills(newBills);
-    saveBills(newBills);
+  // Cloud & Auth State
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('local_only');
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState<boolean>(false);
+  const [isMigrationModalOpen, setIsMigrationModalOpen] = useState<boolean>(false);
+
+  // Migration & Concurrency protection
+  const [pendingMigrationSnapshot, setPendingMigrationSnapshot] = useState<{
+    bills: Bill[];
+    schedule: WorkSchedule;
+    closures: Record<string, DailyClosure>;
+  } | null>(null);
+  const isReloadingRef = useRef(false);
+  const isMigrationPendingRef = useRef(false);
+
+  // Subscribe to sync status
+  useEffect(() => {
+    const unsubscribe = subscribeSyncStatus((status) => {
+      setSyncStatus(status);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Fetch and sync data helper (guarded against concurrent reloads and pending migration)
+  const reloadData = useCallback(async (currentUid?: string) => {
+    if (isReloadingRef.current) return;
+    if (isMigrationPendingRef.current) return;
+
+    try {
+      isReloadingRef.current = true;
+      const data = await loadAppData(currentUid);
+      setBills(data.bills);
+      setSchedule(data.schedule);
+      setClosures(data.closures);
+    } finally {
+      isReloadingRef.current = false;
+    }
+  }, []);
+
+  // Supabase Auth Listener
+  useEffect(() => {
+    if (!supabase) return;
+
+    let isMounted = true;
+
+    const handleAuthUser = async (user: { id: string; email?: string | null } | null) => {
+      if (!isMounted) return;
+
+      if (user) {
+        const uid = user.id;
+        setUserId(uid);
+        setUserEmail(user.email || null);
+
+        // Check if user already has data in Supabase (e.g. mobile or returning login)
+        const cloudHasData = await checkCloudHasData(uid);
+        if (!isMounted) return;
+
+        if (cloudHasData) {
+          // Returning cloud user: cloud is the source of truth
+          isMigrationPendingRef.current = false;
+          setIsMigrationModalOpen(false);
+          setPendingMigrationSnapshot(null);
+          await reloadData(uid);
+        } else if (hasLocalDataToMigrate()) {
+          // First-time cloud login with genuine local browser records:
+          // Preserve an immutable copy of the local records!
+          const snapshot = {
+            bills: loadLocalBills(),
+            schedule: loadLocalSchedule(),
+            closures: loadLocalClosures(),
+          };
+          archiveLocalDataBeforeMigration(snapshot);
+          setPendingMigrationSnapshot(snapshot);
+          isMigrationPendingRef.current = true;
+          setIsMigrationModalOpen(true);
+          // CRITICAL: We DO NOT call reloadData(uid) here. Local data remains active.
+        } else {
+          // No cloud data and no local data to migrate
+          isMigrationPendingRef.current = false;
+          setIsMigrationModalOpen(false);
+          setPendingMigrationSnapshot(null);
+          await reloadData(uid);
+        }
+      } else {
+        setUserId(null);
+        setUserEmail(null);
+        isMigrationPendingRef.current = false;
+        setIsMigrationModalOpen(false);
+        setPendingMigrationSnapshot(null);
+        await reloadData();
+      }
+    };
+
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        handleAuthUser(session.user);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (session?.user) {
+          await handleAuthUser(session.user);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        await handleAuthUser(null);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, [reloadData]);
+
+  // Sync on window focus / tab visibility change (prevent concurrent reloads and protect unconfirmed changes)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        userId &&
+        !isMigrationPendingRef.current &&
+        !isReloadingRef.current
+      ) {
+        reloadData(userId);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [userId, reloadData]);
+
+  // Persist bills
+  const updateBills = async (newBills: Bill[]) => {
+    const normalized = await syncBills(newBills, userId || undefined);
+    setBills(normalized);
   };
 
-  const updateSchedule = (newSchedule: WorkSchedule) => {
+  // Persist schedule
+  const updateSchedule = async (newSchedule: WorkSchedule) => {
     setSchedule(newSchedule);
-    saveSchedule(newSchedule);
+    await syncSchedule(newSchedule, userId || undefined);
   };
 
-  const updateClosures = (newClosure: DailyClosure) => {
+  // Persist single daily closure
+  const updateClosures = async (newClosure: DailyClosure) => {
     const updated = {
       ...closures,
       [newClosure.date]: newClosure,
     };
     setClosures(updated);
-    saveClosures(updated);
+    await syncClosure(newClosure, updated, userId || undefined);
   };
 
   // Delete a specific bill across the entire app
@@ -74,7 +229,7 @@ export default function App() {
     const updated = { ...closures };
     delete updated[dateStr];
     setClosures(updated);
-    saveClosures(updated);
+    syncDeleteClosure(dateStr, updated, userId || undefined);
   };
 
   // Toggle single day override directly from calendar or day modal
@@ -99,23 +254,32 @@ export default function App() {
   // Reset to default sample driver data
   const handleResetToDefaults = () => {
     const defaults = resetAllData();
-    setBills(defaults.bills);
-    setSchedule(defaults.schedule);
+    updateBills(defaults.bills);
+    updateSchedule(defaults.schedule);
     setClosures({});
+    if (userId) {
+      // Clear closures on cloud as well
+      Object.keys(closures).forEach((d) => syncDeleteClosure(d, {}, userId));
+    }
   };
 
   // Reset EVERYTHING to start mid-month with existing accounts and accumulated amounts
   const handleResetAllBlank = () => {
     const blank = resetToBlank();
-    setBills(blank.bills);
+    updateBills(blank.bills);
     setClosures({});
+    if (userId) {
+      Object.keys(closures).forEach((d) => syncDeleteClosure(d, {}, userId));
+    }
     setShowWizard(true); // Open wizard immediately for smooth entry!
   };
 
   // Clear closures only
   const handleClearClosures = () => {
     setClosures({});
-    saveClosures({});
+    if (userId) {
+      Object.keys(closures).forEach((d) => syncDeleteClosure(d, {}, userId));
+    }
   };
 
   // Complete wizard
@@ -125,6 +289,63 @@ export default function App() {
     setOnboardingDone(true);
     setShowWizard(false);
     setActiveTab('calendar');
+  };
+
+  // Handle Logout
+  const handleLogout = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setUserId(null);
+    setUserEmail(null);
+    await reloadData();
+  };
+
+  // Handle Migration Confirmation
+  const handleConfirmMigration = async () => {
+    if (!userId) return;
+    const dataToMigrate = pendingMigrationSnapshot || {
+      bills,
+      schedule,
+      closures,
+    };
+    const res = await migrateLocalToCloud(
+      userId,
+      dataToMigrate.bills,
+      dataToMigrate.schedule,
+      dataToMigrate.closures
+    );
+    if (res.success) {
+      isMigrationPendingRef.current = false;
+      setIsMigrationModalOpen(false);
+      setPendingMigrationSnapshot(null);
+      await reloadData(userId);
+    } else {
+      throw new Error(res.error || 'Erro durante a migração');
+    }
+  };
+
+  // Handle Dismiss Migration (discard local data, use cloud data)
+  const handleDismissMigration = async () => {
+    isMigrationPendingRef.current = false;
+    setIsMigrationModalOpen(false);
+    setPendingMigrationSnapshot(null);
+    if (userId) {
+      await reloadData(userId);
+    }
+  };
+
+  // Handle Backup Restore
+  const handleRestoreBackup = async (backupData: BackupData) => {
+    updateBills(backupData.bills);
+    updateSchedule(backupData.schedule);
+    setClosures(backupData.closures);
+
+    if (userId) {
+      for (const c of Object.values(backupData.closures)) {
+        await syncClosure(c, backupData.closures, userId);
+      }
+    }
   };
 
   // Computed today's metrics
@@ -146,6 +367,11 @@ export default function App() {
         todayTarget={todaySchedule.totalDayTarget}
         todayIsWorkDay={todaySchedule.isWorkDay}
         onOpenResetMonthModal={() => setIsResetModalOpen(true)}
+        syncStatus={syncStatus}
+        userEmail={userEmail}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
+        onOpenBackup={() => setIsBackupModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -170,14 +396,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowWizard(true)}
-                    className="px-3.5 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs shadow-md"
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs shadow-md cursor-pointer"
                   >
                     Abrir Assistente
                   </button>
                   <button
                     type="button"
                     onClick={handleResetToDefaults}
-                    className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold border border-slate-700"
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold border border-slate-700 cursor-pointer"
                   >
                     Carregar Exemplo
                   </button>
@@ -229,7 +455,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setIsResetModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Zerar / Ajustar Mês</span>
@@ -238,7 +464,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowWizard(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-colors cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>Reabrir Assistente Passo a Passo</span>
@@ -254,6 +480,7 @@ export default function App() {
                   onResetAllBlank={handleResetAllBlank}
                   onClearClosures={handleClearClosures}
                   onOpenResetMonthModal={() => setIsResetModalOpen(true)}
+                  onOpenBackup={() => setIsBackupModalOpen(true)}
                 />
               </div>
             )}
@@ -261,13 +488,38 @@ export default function App() {
         )}
       </main>
 
-      {/* Global Reset Month Modal */}
+      {/* Modais */}
       <ResetMonthModal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
         onResetAllBlank={handleResetAllBlank}
         onResetOnlyClosures={handleClearClosures}
         onResetToDefaults={handleResetToDefaults}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={(email) => {
+          setUserEmail(email);
+        }}
+      />
+
+      <BackupModal
+        isOpen={isBackupModalOpen}
+        onClose={() => setIsBackupModalOpen(false)}
+        bills={bills}
+        schedule={schedule}
+        closures={closures}
+        onRestoreBackup={handleRestoreBackup}
+      />
+
+      <MigrationModal
+        isOpen={isMigrationModalOpen}
+        bills={pendingMigrationSnapshot?.bills || bills}
+        closures={pendingMigrationSnapshot?.closures || closures}
+        onConfirmMigration={handleConfirmMigration}
+        onDismiss={handleDismissMigration}
       />
 
       {/* Mobile Sticky Bottom Navigation Bar */}
