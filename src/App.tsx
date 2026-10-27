@@ -15,6 +15,7 @@ import { AuthModal } from './components/AuthModal';
 import { BackupModal } from './components/BackupModal';
 import { MigrationModal } from './components/MigrationModal';
 import { LoginView } from './components/LoginView';
+import { SidebarMenu } from './components/SidebarMenu';
 import { Bill, WorkSchedule, DailyClosure } from './types';
 import {
   loadBills as loadLocalBills,
@@ -25,8 +26,8 @@ import {
   resetAllData,
   resetToBlank,
 } from './utils/storage';
-import { getTodayStr } from './utils/formatters';
-import { calculateDaySchedule, calculateAllBillsProgress } from './utils/calculator';
+import { getTodayStr, parseDate, formatDateToISO, formatCurrency } from './utils/formatters';
+import { calculateDaySchedule, calculateAllBillsProgress, isWorkDay } from './utils/calculator';
 import { BackupData } from './utils/backupValidator';
 import {
   SyncStatus,
@@ -42,7 +43,18 @@ import {
   archiveLocalDataBeforeMigration,
 } from './services/dataService';
 import { supabase } from './services/supabase';
-import { Calendar, CheckSquare, PiggyBank, Settings, Sparkles, RotateCcw, Car } from 'lucide-react';
+import {
+  Calendar,
+  CheckSquare,
+  PiggyBank,
+  Settings,
+  Sparkles,
+  RotateCcw,
+  Car,
+  Briefcase,
+  BedDouble,
+  DollarSign,
+} from 'lucide-react';
 
 export default function App() {
   const [bills, setBills] = useState<Bill[]>(() => loadLocalBills());
@@ -52,6 +64,7 @@ export default function App() {
   const [closureTargetDate, setClosureTargetDate] = useState<string>(getTodayStr());
   const [showWizard, setShowWizard] = useState<boolean>(() => !loadOnboardingStatus() && bills.length === 0);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
   // Cloud & Auth State
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
@@ -397,6 +410,23 @@ export default function App() {
   const totalMonthlyBills = bills.reduce((sum, b) => sum + b.amount, 0);
   const totalReserved = allBillsProgress.reduce((sum, b) => sum + b.alreadyReserved, 0);
 
+  // Month work days and rest days calculation
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  let currentMonthWorkDays = 0;
+  let currentMonthRestDays = 0;
+  for (let d = 1; d <= daysInCurrentMonth; d++) {
+    const dStr = formatDateToISO(new Date(currentYear, currentMonth, d));
+    if (isWorkDay(dStr, schedule)) {
+      currentMonthWorkDays++;
+    } else {
+      currentMonthRestDays++;
+    }
+  }
+
   // 1. Discrete Loading State while verifying session
   if (isAuthChecking) {
     return (
@@ -432,20 +462,24 @@ export default function App() {
   // 3. Authenticated: Render Main Application Dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
-      {/* Top Header & Navigation */}
-      <Header
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        totalMonthlyBills={totalMonthlyBills}
+      {/* Slide-out Sidebar Drawer */}
+      <SidebarMenu
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        userEmail={userEmail}
+        syncStatus={syncStatus}
         totalReserved={totalReserved}
-        todayTarget={todaySchedule.totalDayTarget}
-        todayIsWorkDay={todaySchedule.isWorkDay}
+        onOpenBackup={() => setIsBackupModalOpen(true)}
         onOpenResetMonthModal={() => setIsResetModalOpen(true)}
+        onOpenWizard={() => setShowWizard(true)}
+        onLogout={handleLogout}
+      />
+
+      {/* Top Header: Clean with Cloud Sync Pill and Menu Button */}
+      <Header
         syncStatus={syncStatus}
         userEmail={userEmail}
-        onOpenAuth={() => setIsAuthModalOpen(true)}
-        onLogout={handleLogout}
-        onOpenBackup={() => setIsBackupModalOpen(true)}
+        onOpenSidebar={() => setIsSidebarOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -460,6 +494,143 @@ export default function App() {
           />
         ) : (
           <>
+            {/* 4 Main KPI Cards: 4 columns on desktop, 2x2 grid on mobile */}
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-5">
+              {/* Card 1: Dias de Trabalho */}
+              <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-lg hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Dias de trabalho</span>
+                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <Briefcase className="w-4 h-4" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight">
+                    {currentMonthWorkDays} <span className="text-xs font-medium text-slate-400">dias</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Escala no mês atual</p>
+                </div>
+              </div>
+
+              {/* Card 2: Dias de Folga */}
+              <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-lg hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Dias de folga</span>
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    <BedDouble className="w-4 h-4" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight">
+                    {currentMonthRestDays} <span className="text-xs font-medium text-slate-400">dias</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Descanso programado</p>
+                </div>
+              </div>
+
+              {/* Card 3: Meta de Hoje */}
+              <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-lg hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Meta de hoje</span>
+                  <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xl sm:text-2xl font-black text-emerald-400 tracking-tight">
+                    {todaySchedule.isWorkDay
+                      ? formatCurrency(todaySchedule.totalDayTarget)
+                      : 'Folga'}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {todaySchedule.isWorkDay ? 'Meta diária recomendada' : 'Sem meta de trabalho hoje'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 4: Total de Contas */}
+              <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between shadow-lg hover:border-slate-700 transition-all">
+                <div className="flex items-center justify-between text-slate-400 mb-2">
+                  <span className="text-xs font-medium uppercase tracking-wider text-slate-400">Total de contas</span>
+                  <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                    <PiggyBank className="w-4 h-4" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight">
+                    {formatCurrency(totalMonthlyBills)}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Soma fixa do mês</p>
+                </div>
+              </div>
+            </section>
+
+            {/* Exactly 4 Quick Access Buttons: Desktop horizontal bar & visible navigation */}
+            <nav className="mb-6 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" aria-label="Navegação principal">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWizard(false);
+                  setActiveTab('calendar');
+                }}
+                className={`flex-1 min-w-[150px] sm:min-w-0 flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                  activeTab === 'calendar' && !showWizard
+                    ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-md shadow-emerald-950/40'
+                    : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+                }`}
+              >
+                <Calendar className="w-4 h-4 shrink-0" />
+                <span className="truncate">Calendário e Diárias</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWizard(false);
+                  setActiveTab('closure');
+                }}
+                className={`flex-1 min-w-[150px] sm:min-w-0 flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                  activeTab === 'closure' && !showWizard
+                    ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-md shadow-emerald-950/40'
+                    : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+                }`}
+              >
+                <CheckSquare className="w-4 h-4 shrink-0" />
+                <span className="truncate">Fechamento do dia</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWizard(false);
+                  setActiveTab('vault');
+                }}
+                className={`flex-1 min-w-[150px] sm:min-w-0 flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                  activeTab === 'vault' && !showWizard
+                    ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-md shadow-emerald-950/40'
+                    : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+                }`}
+              >
+                <PiggyBank className="w-4 h-4 shrink-0" />
+                <span className="truncate">Cofre e Metas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWizard(false);
+                  setActiveTab('settings');
+                }}
+                className={`flex-1 min-w-[150px] sm:min-w-0 flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
+                  activeTab === 'settings' && !showWizard
+                    ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-md shadow-emerald-950/40'
+                    : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+                }`}
+              >
+                <Settings className="w-4 h-4 shrink-0" />
+                <span className="truncate">Contas e Folgas</span>
+              </button>
+            </nav>
             {/* Quick banner if no bills registered yet */}
             {bills.length === 0 && (
               <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -659,7 +830,7 @@ export default function App() {
           }`}
         >
           <Settings className="w-5 h-5" />
-          <span className="text-[10px] tracking-tight">Ajustes</span>
+          <span className="text-[10px] tracking-tight">Contas</span>
         </button>
       </nav>
     </div>
