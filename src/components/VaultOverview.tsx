@@ -37,16 +37,22 @@ export const VaultOverview: React.FC<VaultOverviewProps> = ({
   const [editIsRecurring, setEditIsRecurring] = useState(true);
   const [editStartDate, setEditStartDate] = useState('');
 
-  // Confirm delete modal state
+  // Confirm modal state
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
     message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDestructive?: boolean;
     action: () => void;
   }>({
     isOpen: false,
     title: '',
     message: '',
+    confirmText: 'Confirmar',
+    cancelText: 'Cancelar',
+    isDestructive: true,
     action: () => {},
   });
 
@@ -128,16 +134,6 @@ export const VaultOverview: React.FC<VaultOverviewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-            {onOpenResetMonthModal && (
-              <button
-                type="button"
-                onClick={onOpenResetMonthModal}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs transition-all"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Zerar / Ajustar Mês</span>
-              </button>
-            )}
 
             <button
               type="button"
@@ -562,11 +558,14 @@ export const VaultOverview: React.FC<VaultOverviewProps> = ({
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Action Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
         message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText || 'Cancelar'}
+        isDestructive={confirmDialog.isDestructive}
         onConfirm={confirmDialog.action}
         onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
       />

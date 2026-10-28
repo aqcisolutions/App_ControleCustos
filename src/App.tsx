@@ -49,7 +49,6 @@ import {
   PiggyBank,
   Settings,
   Sparkles,
-  RotateCcw,
   Car,
   Briefcase,
   BedDouble,
@@ -696,16 +695,7 @@ export default function App() {
 
             {activeTab === 'settings' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setIsResetModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Zerar / Ajustar Mês</span>
-                  </button>
-
+                <div className="flex items-center justify-end gap-2 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setShowWizard(true)}

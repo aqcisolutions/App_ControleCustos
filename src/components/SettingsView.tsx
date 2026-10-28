@@ -198,17 +198,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Defina suas contas, valores já acumulados para o mês em andamento e seus dias de folga.
             </p>
           </div>
-
-          {onOpenResetMonthModal && (
-            <button
-              type="button"
-              onClick={onOpenResetMonthModal}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs shadow-md transition-all self-start sm:self-auto"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Zerar / Ajustar Mês</span>
-            </button>
-          )}
         </div>
       </div>
 

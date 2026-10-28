@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   User,
@@ -13,9 +13,11 @@ import {
   AlertCircle,
   CloudOff,
   Car,
+  Trash2,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import { SyncStatus } from '../services/dataService';
+import { ConfirmModal } from './ConfirmModal';
 
 interface SidebarMenuProps {
   isOpen: boolean;
@@ -40,6 +42,23 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onOpenWizard,
   onLogout,
 }) => {
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+    action: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirmar',
+    cancelText: 'Cancelar',
+    isDestructive: true,
+    action: () => {},
+  });
   // Close on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -186,12 +205,50 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
               </div>
             </button>
 
-            {/* Reset / Month adjustments */}
+            {/* Botão Zerar */}
             <button
               type="button"
               onClick={() => {
-                onClose();
-                onOpenResetMonthModal();
+                setConfirmDialog({
+                  isOpen: true,
+                  title: 'Confirmar zeragem',
+                  message: 'Tem certeza de que deseja zerar os valores? Essa ação poderá alterar os dados financeiros registrados.',
+                  confirmText: 'Sim, zerar',
+                  cancelText: 'Cancelar',
+                  isDestructive: true,
+                  action: () => {
+                    onClose();
+                    onOpenResetMonthModal();
+                  },
+                });
+              }}
+              className="w-full p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 flex items-center gap-3 transition-colors text-left cursor-pointer"
+            >
+              <div className="p-2 rounded-lg bg-rose-500/15 text-rose-400 shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-slate-100">Zerar</div>
+                <div className="text-xs text-slate-400 truncate">Zerar fechamentos ou dados do mês</div>
+              </div>
+            </button>
+
+            {/* Botão Ajustar Mês */}
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmDialog({
+                  isOpen: true,
+                  title: 'Confirmar ajuste do mês',
+                  message: 'Tem certeza de que deseja ajustar o mês selecionado? Os valores poderão ser alterados.',
+                  confirmText: 'Sim, ajustar',
+                  cancelText: 'Cancelar',
+                  isDestructive: false,
+                  action: () => {
+                    onClose();
+                    onOpenResetMonthModal();
+                  },
+                });
               }}
               className="w-full p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 flex items-center gap-3 transition-colors text-left cursor-pointer"
             >
@@ -199,8 +256,8 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                 <RotateCcw className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-slate-100">Zerar / Ajustar Mês</div>
-                <div className="text-xs text-slate-400 truncate">Iniciar novo mês ou limpar fechamentos</div>
+                <div className="text-sm font-semibold text-slate-100">Ajustar Mês</div>
+                <div className="text-xs text-slate-400 truncate">Ajustar valores acumulados no mês</div>
               </div>
             </button>
 
@@ -245,6 +302,18 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText || 'Cancelar'}
+        isDestructive={confirmDialog.isDestructive}
+        onConfirm={confirmDialog.action}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

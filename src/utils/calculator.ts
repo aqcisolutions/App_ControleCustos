@@ -223,27 +223,32 @@ export function calculateBillDailyMap(
     ? Math.round((balanceToDivide / totalWorkDaysInCycle) * 100) / 100
     : 0;
 
-  // Track closures already completed in THIS cycle
+  // Track closures already completed in THIS cycle.
+  // We inspect all completed closures in closures within the cycle to ensure that any confirmed
+  // closure (whether on scheduled work days, weekends, or custom overrides) reliably accumulates.
   let savedFromClosures = 0;
   let hasDeficitFromNao = false;
 
-  for (const dayStr of workDays) {
-    const closure = closures[dayStr];
-    const billStatus = closure?.billsStatus?.[bill.id];
-    if (closure?.completed && billStatus) {
-      if (billStatus.saved) {
-        savedFromClosures += billStatus.actualAmount !== undefined && billStatus.actualAmount > 0
-          ? billStatus.actualAmount
-          : (billStatus.targetAmount || baseDailyQuota);
-      } else {
-        // Driver marked NÃO -> deficit to redistribute
-        hasDeficitFromNao = true;
+  for (const [dayStr, closure] of Object.entries(closures)) {
+    if (!closure?.completed) continue;
+    if (dayStr >= cycleStart && dayStr <= cycleEnd) {
+      const billStatus = closure.billsStatus?.[bill.id];
+      if (billStatus) {
+        if (billStatus.saved) {
+          const amt = billStatus.actualAmount !== undefined && billStatus.actualAmount > 0
+            ? billStatus.actualAmount
+            : (billStatus.targetAmount || baseDailyQuota);
+          savedFromClosures += amt;
+        } else {
+          // Driver marked NÃO -> deficit to redistribute
+          hasDeficitFromNao = true;
+        }
       }
     }
   }
 
-  const alreadyReservedSum = initialAcc + savedFromClosures;
-  const remainingAmount = Math.max(0, bill.amount - alreadyReservedSum);
+  const alreadyReservedSum = Math.round((initialAcc + savedFromClosures) * 100) / 100;
+  const remainingAmount = Math.max(0, Math.round((bill.amount - alreadyReservedSum) * 100) / 100);
 
   const todayStr = getTodayStr();
   const remainingWorkDays = workDays.filter(
@@ -400,23 +405,29 @@ export function calculateDaySchedule(
       isDueDayForBills.push(bill);
     }
 
-    // Only add daily target if this is a work day and within period
-    if (workDay && dateStr <= billCalc.cycleEnd) {
-      const targetAmount = billCalc.dailyTargets[dateStr] || 0;
+    // Add daily target if within period: either it's a scheduled work day, or a closure exists for this date
+    if (dateStr <= billCalc.cycleEnd) {
       const closureStatus = closure?.billsStatus?.[bill.id];
+      const targetAmount = workDay
+        ? (billCalc.dailyTargets[dateStr] || 0)
+        : (closureStatus?.targetAmount || billCalc.baseDailyQuota);
 
-      billTargets.push({
-        billId: bill.id,
-        billDescription: bill.description,
-        targetAmount,
-        dueDay: bill.dueDay,
-        cycleStart: billCalc.cycleStart,
-        cycleEnd: billCalc.cycleEnd,
-        savedStatus: closureStatus ? closureStatus.saved : undefined,
-        isInitialCycle: billCalc.isInitialCycle,
-      });
+      if (workDay || closure?.completed) {
+        billTargets.push({
+          billId: bill.id,
+          billDescription: bill.description,
+          targetAmount,
+          dueDay: bill.dueDay,
+          cycleStart: billCalc.cycleStart,
+          cycleEnd: billCalc.cycleEnd,
+          savedStatus: closureStatus ? closureStatus.saved : undefined,
+          isInitialCycle: billCalc.isInitialCycle,
+        });
 
-      totalDayTarget += targetAmount;
+        if (workDay) {
+          totalDayTarget += targetAmount;
+        }
+      }
     }
   }
 

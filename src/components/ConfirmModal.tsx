@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Trash2, X, Check, RotateCcw } from 'lucide-react';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -58,7 +58,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
           >
             {cancelText}
           </button>
@@ -69,13 +69,17 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               onConfirm();
               onCancel();
             }}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer ${
               isDestructive
                 ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
                 : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/30'
             }`}
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            {isDestructive ? (
+              <Trash2 className="w-3.5 h-3.5" />
+            ) : (
+              <RotateCcw className="w-3.5 h-3.5" />
+            )}
             <span>{confirmText}</span>
           </button>
         </div>
