@@ -1,6 +1,6 @@
 {
-  "summary":  "Plano detalhado de reorganização visual da interface do MotoristaPro e implementação do calendário multi-visão (Dia, Semana, Mês). Define a simplificação do topo com indicador de sincronização exclusivo, a criação dos 4 cards principais reutilizando cálculos existentes, os 4 botões de acesso rápido estilizados, o menu lateral deslizante (gaveta) para desktop e celular contendo ações secundárias (Perfil, Backup, Zerar Mês, Assistente, Logout), e o calendário responsivo com alternância entre Dia, Semana e Mês sem tocar na lógica de cálculo financeiro ou no Supabase.",
-  "updatedAt":  "2026-10-26T15:15:25.133706222Z",
+  "summary":  "Plano de análise e reorganização visual da tela principal do MotoristaPro: simplificação do dashboard com 4 cards principais, acessos rápidos padronizados, calendário recolhível com botão 'Ver Calendário' e modos Dia/Semana/Mês, sem alterar nenhuma regra de negócio ou sincronização.",
+  "updatedAt":  "2026-10-29T01:45:31.264084585Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

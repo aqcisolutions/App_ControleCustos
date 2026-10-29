@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Calendar as CalendarIcon,
   Bell,
   CheckCircle2,
@@ -35,6 +36,7 @@ interface CalendarViewProps {
   onOpenClosureForDay: (dateStr: string) => void;
   onDeleteClosure?: (dateStr: string) => void;
   onDeleteBill?: (billId: string) => void;
+  onCollapseCalendar?: () => void;
 }
 
 export type CalendarViewMode = 'day' | 'week' | 'month';
@@ -47,6 +49,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onOpenClosureForDay,
   onDeleteClosure,
   onDeleteBill,
+  onCollapseCalendar,
 }) => {
   const todayStr = getTodayStr();
   const today = parseDate(todayStr);
@@ -283,6 +286,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+
+              {onCollapseCalendar && (
+                <button
+                  type="button"
+                  onClick={onCollapseCalendar}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/90 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700/80 transition-colors cursor-pointer shadow-sm ml-1"
+                  title="Recolher calendário e voltar ao resumo inicial"
+                >
+                  <ChevronUp className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Recolher</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

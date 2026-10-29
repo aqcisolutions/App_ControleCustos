@@ -26,7 +26,7 @@ import {
   resetAllData,
   resetToBlank,
 } from './utils/storage';
-import { getTodayStr, parseDate, formatDateToISO, formatCurrency } from './utils/formatters';
+import { getTodayStr, parseDate, formatDateToISO, formatCurrency, formatDateLongBR } from './utils/formatters';
 import { calculateDaySchedule, calculateAllBillsProgress, isWorkDay } from './utils/calculator';
 import { BackupData } from './utils/backupValidator';
 import {
@@ -53,6 +53,11 @@ import {
   Briefcase,
   BedDouble,
   DollarSign,
+  ChevronRight,
+  CheckCircle2,
+  Clock,
+  Bell,
+  ArrowRight,
 } from 'lucide-react';
 
 export default function App() {
@@ -64,6 +69,7 @@ export default function App() {
   const [showWizard, setShowWizard] = useState<boolean>(() => !loadOnboardingStatus() && bills.length === 0);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState<boolean>(false);
 
   // Cloud & Auth State
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
@@ -408,6 +414,10 @@ export default function App() {
 
   const totalMonthlyBills = bills.reduce((sum, b) => sum + b.amount, 0);
   const totalReserved = allBillsProgress.reduce((sum, b) => sum + b.alreadyReserved, 0);
+  const todayClosure = closures[todayStr];
+  const todayReservedAmount = todayClosure
+    ? Object.values(todayClosure.billsStatus || {}).reduce((s, b) => s + (b.saved ? b.actualAmount : 0), 0)
+    : 0;
 
   // Month work days and rest days calculation
   const now = new Date();
@@ -571,6 +581,7 @@ export default function App() {
                 onClick={() => {
                   setShowWizard(false);
                   setActiveTab('calendar');
+                  setIsCalendarExpanded(true);
                 }}
                 className={`flex-1 min-w-[150px] sm:min-w-0 flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border cursor-pointer ${
                   activeTab === 'calendar' && !showWizard
@@ -656,7 +667,171 @@ export default function App() {
             )}
 
             {/* Active Tab View */}
-            {activeTab === 'calendar' && (
+            {activeTab === 'calendar' && !isCalendarExpanded && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                {/* Clean, Focused "Resumo de Hoje" Card */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-5">
+                  {/* Header Row: Date & Status Badge */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-800">
+                    <div>
+                      <div className="text-[11px] uppercase font-bold tracking-wider text-emerald-400 mb-1 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Resumo de Hoje</span>
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black text-slate-100 capitalize">
+                        {formatDateLongBR(todayStr)}
+                      </h2>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      {todaySchedule.isWorkDay ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          <Briefcase className="w-3.5 h-3.5" />
+                          <span>Dia de Trabalho</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                          <BedDouble className="w-3.5 h-3.5" />
+                          <span>Dia de Folga</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2 Main Info Columns: Meta do Dia & Status do Fechamento */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Column 1: Meta Recomendada do Dia */}
+                    <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-slate-400 mb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Meta de Hoje
+                        </span>
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                          <DollarSign className="w-4 h-4" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight font-mono">
+                          {todaySchedule.isWorkDay
+                            ? formatCurrency(todaySchedule.totalDayTarget)
+                            : 'Folga'}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {todaySchedule.isWorkDay
+                            ? todaySchedule.billTargets.length > 0
+                              ? `${todaySchedule.billTargets.length} ${todaySchedule.billTargets.length === 1 ? 'conta ativa na diária de hoje' : 'contas ativas na diária de hoje'}`
+                              : 'Sem contas ativas para divisão hoje'
+                            : 'Sem meta de reserva programada para hoje'}
+                        </p>
+                      </div>
+
+                      {todaySchedule.isDueDayForBills.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center gap-2 text-xs text-amber-400">
+                          <Bell className="w-4 h-4 shrink-0" />
+                          <span className="truncate">
+                            Vence hoje: {todaySchedule.isDueDayForBills.map((b) => b.description).join(', ')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Column 2: Status do Fechamento Diário */}
+                    <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-slate-400 mb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Fechamento de Hoje
+                        </span>
+                        <div
+                          className={`p-1.5 rounded-lg ${
+                            todaySchedule.hasClosure
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : 'bg-amber-500/15 text-amber-400'
+                          }`}
+                        >
+                          {todaySchedule.hasClosure ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            <Clock className="w-4 h-4" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        {todaySchedule.hasClosure ? (
+                          <>
+                            <div className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Fechamento realizado</span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {todayClosure && todayReservedAmount > 0
+                                ? `${formatCurrency(todayReservedAmount)} guardado na reserva (SIM)`
+                                : 'Fechamento salvo sem adicionar reserva (NÃO)'}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-sm font-bold text-amber-400 flex items-center gap-1.5">
+                              <Clock className="w-4 h-4" />
+                              <span>Fechamento ainda não realizado</span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Registre seus ganhos e km ao encerrar as atividades de hoje
+                            </p>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-slate-800/80">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenClosureForDay(todayStr)}
+                          className="w-full py-2 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <CheckSquare className="w-3.5 h-3.5" />
+                          <span>
+                            {todaySchedule.hasClosure ? 'Editar Fechamento de Hoje' : 'Fazer Fechamento de Hoje'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Prominent "Ver Calendário" Action Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsCalendarExpanded(true)}
+                    className="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-emerald-500/30 hover:border-emerald-400/70 text-slate-100 flex items-center justify-between transition-all group cursor-pointer shadow-lg hover:shadow-emerald-950/40"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors shrink-0 shadow-inner">
+                        <Calendar className="w-5 h-5" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base sm:text-lg font-extrabold text-slate-100 flex items-center gap-2 flex-wrap">
+                          <span>Ver Calendário</span>
+                          <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                            Dia • Semana • Mês
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Consulte diárias de outros dias, alterne folgas e visualize o mês completo
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 font-bold text-xs sm:text-sm transition-all shrink-0">
+                      <span>Abrir</span>
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Active Tab View: Expanded Calendar */}
+            {activeTab === 'calendar' && isCalendarExpanded && (
               <CalendarView
                 bills={bills}
                 schedule={schedule}
@@ -665,6 +840,7 @@ export default function App() {
                 onOpenClosureForDay={handleOpenClosureForDay}
                 onDeleteClosure={handleDeleteClosure}
                 onDeleteBill={handleDeleteBill}
+                onCollapseCalendar={() => setIsCalendarExpanded(false)}
               />
             )}
 
@@ -764,6 +940,7 @@ export default function App() {
           onClick={() => {
             setShowWizard(false);
             setActiveTab('calendar');
+            setIsCalendarExpanded(true);
           }}
           className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
             activeTab === 'calendar' && !showWizard
