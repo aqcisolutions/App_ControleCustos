@@ -80,3 +80,54 @@ export interface DayCalculation {
   hasClosure: boolean;
   closure?: DailyClosure;
 }
+
+// --- Diário de Corridas Types ---
+export type RidePlatform = 'uber' | '99' | 'ambas';
+
+export interface RideLogEntry {
+  id: string;
+  date: string; // 'YYYY-MM-DD' (único por dia)
+  platform: RidePlatform;
+  kmDriven: number;
+  hoursDriven: number; // Armazenado em formato decimal (ex: 8.5 para 8h 30m)
+  totalRides: number;
+  grossEarnings: number;
+  fuelExpenses: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RidePerformanceMetrics {
+  grossPerHour: number | null;
+  averagePerRide: number | null;
+  grossPerKm: number | null;
+  ridesPerHour: number | null;
+  valueAfterFuel: number | null;
+  fuelCostPerKm: number | null;
+}
+
+export interface RideLogConflict {
+  id: string;
+  rideDate: string;
+  detectedAt: string;
+  localEntry: RideLogEntry;
+  cloudEntry: RideLogEntry;
+  divergentFields: string[];
+}
+
+export interface RideBackupSnapshot {
+  backupKey: string;
+  timestamp: string;
+  count: number;
+}
+
+export type RideCloudStatus =
+  | 'synced'
+  | 'table_not_found'
+  | 'offline'
+  | 'auth_required'
+  | 'conflict'
+  | 'local_only'
+  | 'error';
+

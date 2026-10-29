@@ -14,6 +14,7 @@ import {
   CloudOff,
   Car,
   Trash2,
+  Gauge,
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import { SyncStatus } from '../services/dataService';
@@ -28,6 +29,7 @@ interface SidebarMenuProps {
   onOpenBackup: () => void;
   onOpenResetMonthModal: () => void;
   onOpenWizard: () => void;
+  onOpenRidesDiary: () => void;
   onLogout: () => void;
 }
 
@@ -40,6 +42,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onOpenBackup,
   onOpenResetMonthModal,
   onOpenWizard,
+  onOpenRidesDiary,
   onLogout,
 }) => {
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -186,6 +189,29 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
               Ferramentas & Dados
             </div>
+
+            {/* Diário de Corridas */}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenRidesDiary();
+              }}
+              className="w-full p-3.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-slate-200 border border-teal-500/30 flex items-center gap-3 transition-colors text-left cursor-pointer group shadow-sm"
+            >
+              <div className="p-2 rounded-lg bg-teal-500/20 text-teal-400 group-hover:bg-teal-500 group-hover:text-slate-950 transition-colors shrink-0">
+                <Gauge className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-slate-100 flex items-center justify-between">
+                  <span>Diário de Corridas</span>
+                  <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.2 rounded bg-teal-500/25 text-teal-300 border border-teal-500/40">
+                    Novo
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 truncate">Resultados consolidados e métricas por km/h</div>
+              </div>
+            </button>
 
             {/* Backup & Restore */}
             <button

@@ -16,7 +16,8 @@ import { BackupModal } from './components/BackupModal';
 import { MigrationModal } from './components/MigrationModal';
 import { LoginView } from './components/LoginView';
 import { SidebarMenu } from './components/SidebarMenu';
-import { Bill, WorkSchedule, DailyClosure } from './types';
+import { RidesDiaryView } from './components/RidesDiaryView';
+import { Bill, WorkSchedule, DailyClosure, RideLogEntry, RideCloudStatus } from './types';
 import {
   loadBills as loadLocalBills,
   loadSchedule as loadLocalSchedule,
@@ -26,6 +27,12 @@ import {
   resetAllData,
   resetToBlank,
 } from './utils/storage';
+import {
+  loadLocalRideLogs,
+  loadRideLogs,
+  syncSaveRideLog,
+  syncDeleteRideLog,
+} from './services/ridesService';
 import { getTodayStr, parseDate, formatDateToISO, formatCurrency, formatDateLongBR } from './utils/formatters';
 import { calculateDaySchedule, calculateAllBillsProgress, isWorkDay } from './utils/calculator';
 import { BackupData } from './utils/backupValidator';
@@ -64,7 +71,12 @@ export default function App() {
   const [bills, setBills] = useState<Bill[]>(() => loadLocalBills());
   const [schedule, setSchedule] = useState<WorkSchedule>(() => loadLocalSchedule());
   const [closures, setClosures] = useState<Record<string, DailyClosure>>(() => loadLocalClosures());
-  const [activeTab, setActiveTab] = useState<'calendar' | 'closure' | 'vault' | 'settings'>('calendar');
+  const [rideLogs, setRideLogs] = useState<Record<string, RideLogEntry>>(() => loadLocalRideLogs());
+  const [ridesCloudAvailable, setRidesCloudAvailable] = useState<boolean>(false);
+  const [ridesCloudError, setRidesCloudError] = useState<string | undefined>();
+  const [ridesCloudStatus, setRidesCloudStatus] = useState<RideCloudStatus>('local_only');
+
+  const [activeTab, setActiveTab] = useState<'calendar' | 'closure' | 'vault' | 'settings' | 'rides'>('calendar');
   const [closureTargetDate, setClosureTargetDate] = useState<string>(getTodayStr());
   const [showWizard, setShowWizard] = useState<boolean>(() => !loadOnboardingStatus() && bills.length === 0);
   const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
@@ -105,10 +117,18 @@ export default function App() {
 
     try {
       isReloadingRef.current = true;
-      const data = await loadAppData(currentUid);
+      const [data, ridesResult] = await Promise.all([
+        loadAppData(currentUid),
+        loadRideLogs(currentUid),
+      ]);
       setBills(data.bills);
       setSchedule(data.schedule);
       setClosures(data.closures);
+      setRideLogs(ridesResult.logs);
+      setRidesCloudAvailable(ridesResult.cloudAvailable);
+      setRidesCloudError(ridesResult.cloudError);
+      setRidesCloudStatus(ridesResult.cloudStatus);
+
     } finally {
       isReloadingRef.current = false;
     }
@@ -306,6 +326,24 @@ export default function App() {
     setActiveTab('closure');
   };
 
+  // Persist ride log entry (ensures uniqueness by date, updates in place)
+  const handleSaveRideLog = async (entry: Omit<RideLogEntry, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+    const res = await syncSaveRideLog(entry, rideLogs, userId || undefined);
+    if (res.success) {
+      setRideLogs((prev) => ({ ...prev, [res.log.date]: res.log }));
+    }
+  };
+
+  // Delete ride log entry
+  const handleDeleteRideLog = async (dateStr: string) => {
+    await syncDeleteRideLog(dateStr, rideLogs, userId || undefined);
+    setRideLogs((prev) => {
+      const updated = { ...prev };
+      delete updated[dateStr];
+      return updated;
+    });
+  };
+
   // Reset to default sample driver data
   const handleResetToDefaults = () => {
     const defaults = resetAllData();
@@ -481,6 +519,10 @@ export default function App() {
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onOpenResetMonthModal={() => setIsResetModalOpen(true)}
         onOpenWizard={() => setShowWizard(true)}
+        onOpenRidesDiary={() => {
+          setShowWizard(false);
+          setActiveTab('rides');
+        }}
         onLogout={handleLogout}
       />
 
@@ -501,6 +543,23 @@ export default function App() {
             onFinish={handleFinishWizard}
             onCancel={bills.length > 0 ? () => setShowWizard(false) : undefined}
           />
+        ) : activeTab === 'rides' ? (
+          <RidesDiaryView
+            logs={rideLogs}
+            onSaveLog={handleSaveRideLog}
+            onDeleteLog={handleDeleteRideLog}
+            onBackToDashboard={() => setActiveTab('calendar')}
+            cloudAvailable={ridesCloudAvailable}
+            cloudError={ridesCloudError}
+            cloudStatus={ridesCloudStatus}
+            userId={userId || undefined}
+            onReloadLogs={async () => {
+              if (userId) {
+                await reloadData(userId);
+              }
+            }}
+          />
+
         ) : (
           <>
             {/* 4 Main KPI Cards: 4 columns on desktop, 2x2 grid on mobile */}

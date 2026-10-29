@@ -1,139 +1,177 @@
-# MotoristaPro — Reorganização e Simplificação Visual da Interface
+# MotoristaPro — Módulo Diário de Corridas
 
-Diagnóstico técnico da estrutura atual e plano de implementação para simplificação da tela principal do MotoristaPro, mantendo os quatro cards essenciais, acessos rápidos padronizados e calendário recolhível com as opções Dia, Semana e Mês.
+Planejamento técnico e arquitetural para a implementação do novo módulo **Diário de Corridas** no MotoristaPro, concebido de forma 100% independente do sistema de contas fixas, escala e Cofre.
 
 ---
 
 ## Revisão do Usuário e Decisões Críticas
 
 > [!IMPORTANT]
-> **Garantia de Regras de Negócio e Persistência:**
-> Nenhuma fórmula financeira, cálculo de diárias/metas (`src/utils/calculator.ts`), processo de fechamento diário, autenticação ou sincronização com o Supabase será alterado. A tarefa é 100% de organização visual e apresentação de interface.
+> **Garantia de Isolamento Total:**
+> O Diário de Corridas não altera nem interfere nas regras atuais do sistema:
+> - O `src/utils/calculator.ts` (cálculo de contas e diárias das despesas) **permanece intacto**.
+> - O `DailyClosure` (fechamento diário focado no pagamento de contas e reserva do cofre) **permanece separado**.
+> - Nenhum cálculo de meta do calendário ou saldo do cofre sofrerá impacto com este novo módulo.
 
-- **Tela Principal Simplificada**: A tela inicial do painel exibirá unicamente as informações essenciais, sem sobrecarga de elementos ou rolagem vertical desnecessária.
-- **Quatro Cards Principais no Topo**:
-  1. *Dias de trabalho*: Dias úteis do mês corrente.
-  2. *Dias de folga*: Folgas programadas do mês corrente.
-  3. *Meta de hoje*: Valor calculado para a diária de hoje (ou indicação de folga).
-  4. *Total de contas*: Soma total das despesas cadastradas no mês.
-- **Quatro Acessos Rápidos Padronizados**:
-  1. *Calendário e Diárias*
-  2. *Fechamento do dia*
-  3. *Cofre e Metas*
-  4. *Contas e Folgas*
-- **Calendário Recolhido por Padrão na Tela Inicial**:
-  - A tela inicial não exibe a grade completa do calendário de forma imediata.
-  - Apresenta um card central elegante com o resumo do dia de hoje e o botão destacado **"Ver Calendário"**.
-  - Ao acionar "Ver Calendário", o usuário consulta o calendário completo com o seletor entre **Dia**, **Semana** e **Mês**, podendo recolher a qualquer momento.
-- **Funcionalidades Secundárias no Menu Lateral**:
-  - As ações "Zerar" e "Ajustar Mês" continuam exclusivamente no menu lateral, com seus respectivos diálogos de confirmação protegidos.
-  - Backup/Restauração, perfil conectado e saída da conta permanecem centralizados no menu lateral.
+- **Registro Consolidado por Dia:** Um único lançamento diário consolida os períodos trabalhados (manhã, tarde, noite) sem exigir múltiplos turnos.
+- **Plataformas Restritas:** Aceita exclusivamente `Uber`, `99` ou `Ambas`.
+- **Métricas Sem Falsas Promessas:** O indicador de faturamento bruto menos combustível é chamado estritamente de **"Valor após combustível"**, deixando explícito que não representa lucro líquido real.
+- **Tratamento de Exceções Matemáticas:** Divisões por zero, horas zeradas ou corridas não informadas retornam `0` formatado, prevenindo `NaN`, `Infinity` ou layouts quebrados.
 
 ---
 
-## 1. Arquivos e Componentes Atuais Envolvidos
+## 1. Visão Geral e Conceito
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                                App.tsx                                 │
-│  Gerencia estado global (bills, schedule, closures, auth, activeTab)   │
-│  Renderiza: Header, 4 Cards, 4 Acessos Rápidos, Card Resumo / Calendário│
-└───────────────────┬────────────────────────────────────────────────────┘
-                    │
-      ┌─────────────┼─────────────────────────────┐
-      ▼             ▼                             ▼
-┌───────────┐ ┌───────────────┐        ┌───────────────────────┐
-│Header.tsx │ │SidebarMenu.tsx│        │  Visão Principal      │
-│(Logo, Nuvem│ │(Zerar, Ajustar│        │  - 4 Cards de Métricas│
-│e Menu)    │ │Backup, Logout)│        │  - 4 Acessos Rápidos  │
-└───────────┘ └───────────────┘        │  - [Ver Calendário]   │
-                                       └──────────┬────────────┘
-                                                  ▼
-                                       ┌───────────────────────┐
-                                       │   CalendarView.tsx    │
-                                       │  Seletor de modos:    │
-                                       │  [Dia | Semana | Mês] │
-                                       │  + DayDetailsModal    │
-                                       └───────────────────────┘
-```
+O **Diário de Corridas** tem como finalidade oferecer ao motorista de aplicativo uma visão operacional pura sobre o seu desempenho ao volante:
+- Quanto gerou por quilômetro rodado e por hora trabalhada.
+- Eficiência das corridas (tempo gasto vs. quantidade de viagens).
+- Impacto imediato do abastecimento no faturamento bruto do dia.
 
-1. **`src/App.tsx`**:
-   - Ponto de entrada do painel principal autenticado.
-   - Contém a definição e cálculo dos 4 cards principais:
-     - `currentMonthWorkDays`
-     - `currentMonthRestDays`
-     - `todaySchedule.totalDayTarget`
-     - `totalMonthlyBills`
-   - Contém a barra de navegação com os 4 botões de acesso rápido.
-   - Atualmente renderiza o `<CalendarView />` completo imediatamente abaixo dos botões na aba `calendar`.
-2. **`src/components/Header.tsx`**:
-   - Barra superior com logo, status de sincronização (`synced`, `saving`, `error`, `local_only`) e botão de abertura do menu lateral.
-3. **`src/components/SidebarMenu.tsx`**:
-   - Drawer deslizante onde estão centralizadas as ações secundárias: Zerar, Ajustar Mês, Backup, Assistente e Logout.
-4. **`src/components/CalendarView.tsx`**:
-   - Componente que já possui a implementação dos modos **Dia**, **Semana** e **Mês**, navegação mensal/semanal/diária e botão "Hoje".
+O módulo atende à rotina real do motorista, permitindo que ele dirija em múltiplos turnos e preencha uma única vez ao chegar em casa, visualizando imediatamente seus indicadores de produtividade.
 
 ---
 
-## 2. Diagnóstico do Calendário Atual
+## 2. Estrutura Funcional e Experiência do Usuário
 
-- **Modos existentes**: O componente `CalendarView.tsx` já foi construído com suporte a `viewMode: 'day' | 'week' | 'month'`.
-  - **Mês**: Exibe a matriz dos 30/31 dias com badges de fechamento e vencimentos de contas.
-  - **Semana**: Exibe os 7 dias da semana selecionada em blocos compactos com foco na meta e atalhos rápidos.
-  - **Dia**: Exibe o detalhamento completo da data selecionada, contas ativas daquele dia e botão para alternar entre dia de trabalho e folga.
-- **Situação a aprimorar**:
-  - Atualmente, ao abrir a tela principal, o calendário abre imediatamente expandido na grade de datas, ocupando a maior parte da tela inicial.
-  - O objetivo é recolher essa grade por padrão na tela inicial, oferecendo a opção explícita **"Ver Calendário"** que abre a experiência completa de navegação (Dia / Semana / Mês) sem perder nenhum dado.
+O módulo é composto por 3 áreas complementares:
 
----
+### Área A — Registrar Dia
+Formulário com preenchimento rápido e otimizado para celulares:
+1. **Data**: Seletor de data (padrão na data atual `YYYY-MM-DD`).
+2. **Plataforma**: Seletor segmentado com três opções exclusivas:
+   - `Uber`
+   - `99`
+   - `Ambas`
+3. **Quilômetros rodados**: Input numérico para o total percorrido no dia (ex.: `185.4 km`).
+4. **Horas efetivamente dirigidas**: Tempo total ao volante somando os períodos e excluindo pausas. Interface com suporte a horas decimais ou seletor amigável (Horas e Minutos, ex.: `8h 30m` = `8.5h`).
+5. **Total de corridas**: Quantidade total de passageiros/corridas atendidas (ex.: `16 corridas`).
+6. **Faturamento bruto**: Valor total ganho somando as plataformas (ex.: `R$ 420,00`).
+7. **Gasto com combustível**: Valor total abastecido no dia (ex.: `R$ 110,00`).
+8. **Ações do formulário**:
+   - Botão **"Salvar Registro do Dia"** (ou **"Atualizar Registro"** caso já exista lançamento na data).
+   - Botão para limpar campos.
 
-## 3. Alterações Visuais Propostas
+### Área B — Desempenho
+Cálculo automático e exibição imediata das 6 métricas operacionais:
 
-1. **Painel Inicial Simplificado (`App.tsx`)**:
-   - Exibir no topo os 4 cards principais padronizados (2x2 no mobile, 4 colunas no desktop).
-   - Exibir a barra dos 4 acessos rápidos com os rótulos exatos:
-     - *Calendário e Diárias*
-     - *Fechamento do dia*
-     - *Cofre e Metas*
-     - *Contas e Folgas*
-   - Na aba inicial, quando o calendário estiver recolhido:
-     - Exibir um card resumido e focado: **Status de Hoje** (Data, se é dia de trabalho ou folga, meta do dia recomendada e se o fechamento de hoje já foi feito).
-     - Botão em destaque visual: **"Ver Calendário Completo"** com ícone intuitivo de expansão.
-   - Ao acionar "Ver Calendário" (ou ao tocar no acesso rápido de Calendário):
-     - Revela suavemente a área do calendário com os controles **Dia**, **Semana** e **Mês** e a opção de recolher de volta.
-2. **Ergonomia e Responsividade**:
-   - **Desktop**: Espaçamento horizontal equilibrado, sem elementos esticados em excesso, cards com alinhamento visual proporcional.
-   - **Celular**: Cards compactos de fácil leitura, botões com altura mínima de 44px para toque ágil, evitando rolagem vertical excessiva.
-
----
-
-## 4. Garantia de Preservação dos Dados e Cálculos
-
-- **`src/utils/calculator.ts` intacto**: As fórmulas de amortização de contas, divisão por dias úteis restantes e cálculo de meta diária não serão tocadas.
-- **Persistência e Supabase**: As funções em `src/services/dataService.ts` e o estado em `src/App.tsx` não sofrerão alterações lógicas.
-- **Fechamento diário**: O fluxo do `DailyClosureView.tsx` e o acúmulo da reserva permanecem exatamente como estão.
-- **Ações "Zerar" e "Ajustar Mês"**: Continuam isoladas no menu lateral com seus modais de confirmação já validados.
-
----
-
-## 5. Riscos e Mitigações
-
-| Risco | Impacto | Mitigação |
+| Métrica | Fórmula de Cálculo | Tratamento de Divisão por Zero |
 | :--- | :--- | :--- |
-| Usuário achar que o calendário foi removido | Baixo / Percepção | Botão "Ver Calendário" terá destaque visual claro (ícone de calendário + texto evidente + resumo do dia atual visível). |
-| Densidade de informação no celular | Médio / Usabilidade | No mobile, quando o calendário for expandido, priorizar o modo "Semana" por padrão para evitar números minúsculos na grade mensal. |
-| Perda de contexto ao selecionar uma data | Baixo | O clique em qualquer data no calendário preserva a abertura do `DayDetailsModal` ou o encaminhamento para o Fechamento do Dia. |
+| **1. Ganhos brutos por hora** | `faturamentoBruto / horasDirigidas` | Se `horasDirigidas <= 0`, exibe `R$ 0,00/h` |
+| **2. Valor médio por corrida** | `faturamentoBruto / totalCorridas` | Se `totalCorridas <= 0`, exibe `R$ 0,00/corrida` |
+| **3. Faturamento por quilômetro** | `faturamentoBruto / kmRodados` | Se `kmRodados <= 0`, exibe `R$ 0,00/km` |
+| **4. Corridas por hora** | `totalCorridas / horasDirigidas` | Se `horasDirigidas <= 0`, exibe `0,0 corridas/h` |
+| **5. Valor após combustível** | `faturamentoBruto - gastoCombustivel` | Não há divisão; subtrai diretamente |
+| **6. Gasto com combustível por km** | `gastoCombustivel / kmRodados` | Se `kmRodados <= 0`, exibe `R$ 0,00/km` |
+
+> [!NOTE]
+> Todos os cards de desempenho terão rótulos claros e legendas contextuais explicando a métrica (ex.: *"Representa o faturamento bruto menos o gasto informado com combustível, sem descontar manutenção, pneus ou depreciação"*).
+
+### Área C — Histórico e Consulta
+Painel histórico com filtros e ações de gestão:
+- **Filtro por Período / Mês**: Seletor de mês/ano para analisar o histórico consolidado.
+- **Card de Resumo do Período**: Total de km rodados, total de horas dirigidas, total faturado e média geral de R$/hora do mês.
+- **Lista de Dias Registrados**:
+  - Cards ordenados cronologicamente (do mais recente para o mais antigo).
+  - Indicador da plataforma utilizada (`Uber`, `99` ou `Ambas`).
+  - Resumo das métricas calculadas daquele dia.
+  - Botão **Editar**: Carrega os dados no formulário para correção.
+  - Botão **Excluir**: Modal de confirmação antes de remover o registro.
+- **Filtro / Busca por Data Específica**: Localização imediata de um dia pesquisado.
 
 ---
 
-## 6. Etapas de Execução
+## 3. Arquitetura Técnica e Modelo de Dados
 
-1. **Etapa 1 — Estruturação do Estado de Visualização no `App.tsx`**:
-   - Introduzir o controle de visibilidade do calendário na tela principal (modo recolhido com botão "Ver Calendário" vs. modo expandido).
-2. **Etapa 2 — Construção do Card Resumo Inicial**:
-   - Desenhar o bloco central conciso exibindo a meta de hoje, status de trabalho/folga e o botão em destaque "Ver Calendário".
-3. **Etapa 3 — Integração e Refinamento do `CalendarView.tsx`**:
-   - Assegurar a transição limpa entre os modos Dia, Semana e Mês e botão de recolhimento.
-4. **Etapa 4 — Validação Visual e Compilação**:
-   - Executar `compile_applet` e `lint_applet`.
-   - Testar o comportamento responsivo em telas desktop e dispositivos móveis.
+### Modelo TypeScript (`src/types/index.ts`)
+```ts
+export type RidePlatform = 'uber' | '99' | 'ambas';
+
+export interface RideLogEntry {
+  id: string;
+  date: string; // 'YYYY-MM-DD' (único por dia)
+  platform: RidePlatform;
+  kmDriven: number;
+  hoursDriven: number; // Armazenado em formato decimal de horas (ex: 7.5 = 7h30)
+  totalRides: number;
+  grossEarnings: number;
+  fuelExpenses: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RidePerformanceMetrics {
+  grossPerHour: number;
+  averagePerRide: number;
+  grossPerKm: number;
+  ridesPerHour: number;
+  valueAfterFuel: number;
+  fuelCostPerKm: number;
+}
+```
+
+### Funções de Cálculo Seguras (`src/utils/rideCalculator.ts`)
+Novo arquivo utilitário dedicado exclusivamente a este módulo para não poluir `calculator.ts`:
+```ts
+export function calculateRideMetrics(
+  entry: Pick<RideLogEntry, 'grossEarnings' | 'fuelExpenses' | 'hoursDriven' | 'kmDriven' | 'totalRides'>
+): RidePerformanceMetrics {
+  const { grossEarnings = 0, fuelExpenses = 0, hoursDriven = 0, kmDriven = 0, totalRides = 0 } = entry;
+
+  return {
+    grossPerHour: hoursDriven > 0 ? grossEarnings / hoursDriven : 0,
+    averagePerRide: totalRides > 0 ? grossEarnings / totalRides : 0,
+    grossPerKm: kmDriven > 0 ? grossEarnings / kmDriven : 0,
+    ridesPerHour: hoursDriven > 0 ? totalRides / hoursDriven : 0,
+    valueAfterFuel: grossEarnings - fuelExpenses,
+    fuelCostPerKm: kmDriven > 0 ? fuelExpenses / kmDriven : 0,
+  };
+}
+```
+
+### Estrutura de Componentes
+```
+┌────────────────────────────────────────────────────────┐
+│                        App.tsx                         │
+│  State: activeTab === 'rides'                          │
+└───────────┬────────────────────────────────┬───────────┘
+            │                                │
+            ▼                                ▼
+┌───────────────────────┐        ┌───────────────────────┐
+│     SidebarMenu       │        │     RidesDiaryView    │
+│ Opção: Diário de      │        │ - Sub-aba: Registro   │
+│ Corridas              │        │ - Sub-aba: Desempenho │
+└───────────────────────┘        │ - Sub-aba: Histórico  │
+                                 └───────────────────────┘
+```
+
+1. **`src/components/RidesDiaryView.tsx`**: Componente principal do módulo, contendo:
+   - Alternador de abas internas: `Registrar Dia`, `Desempenho` e `Histórico`.
+   - Formulário de lançamento com feedback visual imediato.
+   - Grade de cartões de métricas responsiva.
+   - Lista histórica com paginação/scroll e busca por data.
+2. **`src/utils/rideStorage.ts`**:
+   - Chave `motoristapro_rides_v1` em `localStorage`.
+   - Métodos seguros `loadRideLogs()`, `saveRideLog()`, `deleteRideLog()`.
+3. **`src/components/SidebarMenu.tsx`**:
+   - Novo item de menu "Diário de Corridas" com ícone representativo (`Gauge` ou `Route`), permitindo acesso direto sem sobrecarregar a barra principal de 4 botões.
+
+---
+
+## 4. Plano de Implementação em Etapas Seguras
+
+1. **Etapa 1: Definição de Tipos e Funções de Cálculo**
+   - Adicionar as interfaces `RideLogEntry` e `RidePerformanceMetrics` em `src/types/index.ts`.
+   - Criar `src/utils/rideCalculator.ts` com validação matemática estrita e proteção contra `NaN` e divisão por zero.
+2. **Etapa 2: Módulo de Armazenamento Local (`rideStorage.ts`)**
+   - Implementar funções de carregar, salvar e deletar registros de corridas com tratamento de erros.
+3. **Etapa 3: Construção do Componente `RidesDiaryView.tsx`**
+   - Construir o formulário de lançamento consolidado do dia.
+   - Implementar os cards das 6 métricas de desempenho.
+   - Implementar a tabela/lista de histórico com suporte a filtro de período, busca por data e edição.
+4. **Etapa 4: Integração de Navegação**
+   - Adicionar o atalho no menu lateral (`SidebarMenu.tsx`).
+   - Adicionar a rota/aba correspondente no `src/App.tsx`.
+5. **Etapa 5: Validação, Compilação e Lint**
+   - Executar `compile_applet` e `lint_applet` (`tsc --noEmit`).
+   - Confirmar responsividade tanto no desktop quanto no smartphone.

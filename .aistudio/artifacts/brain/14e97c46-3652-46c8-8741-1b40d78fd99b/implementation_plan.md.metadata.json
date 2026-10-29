@@ -1,6 +1,6 @@
 {
-  "summary":  "Plano de análise e reorganização visual da tela principal do MotoristaPro: simplificação do dashboard com 4 cards principais, acessos rápidos padronizados, calendário recolhível com botão 'Ver Calendário' e modos Dia/Semana/Mês, sem alterar nenhuma regra de negócio ou sincronização.",
-  "updatedAt":  "2026-10-29T01:45:31.264084585Z",
+  "summary":  "Plano detalhado de arquitetura e implementação para o novo módulo Diário de Corridas no MotoristaPro, incluindo modelo de dados independente, formulário consolidado de turno único diário, cálculo seguro das 6 métricas de desempenho e histórico consultável e editável.",
+  "updatedAt":  "2026-10-29T02:21:21.097903980Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
