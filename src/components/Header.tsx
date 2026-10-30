@@ -7,12 +7,14 @@ interface HeaderProps {
   syncStatus: SyncStatus;
   userEmail: string | null;
   onOpenSidebar: () => void;
+  onNavigateHome?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   syncStatus,
   userEmail,
   onOpenSidebar,
+  onNavigateHome,
 }) => {
   const todayStr = getTodayStr();
   const formattedToday = formatDateLongBR(todayStr);
@@ -21,21 +23,30 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <div className="flex items-center justify-between gap-3">
-          {/* Logo & App Name */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-950/40 text-white font-bold ring-1 ring-emerald-400/20 shrink-0">
+          {/* Logo & App Name (Início - Clicável) */}
+          <button
+            type="button"
+            onClick={onNavigateHome}
+            className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none transition-opacity hover:opacity-90 active:scale-[0.99]"
+            title="Voltar ao início (Painel principal)"
+            aria-label="Ir para a tela principal do MotoristaPro"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-950/40 text-white font-bold ring-1 ring-emerald-400/20 shrink-0 group-hover:ring-emerald-400/50 group-hover:shadow-emerald-900/40 transition-all">
               <Car className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-slate-100 tracking-tight">MotoristaPro</h1>
+                <h1 className="text-lg font-bold text-slate-100 tracking-tight group-hover:text-emerald-400 transition-colors">
+                  MotoristaPro
+                </h1>
                 <span className="hidden sm:inline-block text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   Diária & Custos
                 </span>
               </div>
               <p className="text-xs text-slate-400 capitalize">{formattedToday}</p>
             </div>
-          </div>
+          </button>
+
 
           {/* Right Slot: Cloud Sync Status + Hamburger Menu Button */}
           <div className="flex items-center gap-2.5 sm:gap-3">

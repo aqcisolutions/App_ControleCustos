@@ -329,10 +329,14 @@ export default function App() {
   // Persist ride log entry (ensures uniqueness by date, updates in place)
   const handleSaveRideLog = async (entry: Omit<RideLogEntry, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
     const res = await syncSaveRideLog(entry, rideLogs, userId || undefined);
-    if (res.success) {
+    if (res.log) {
       setRideLogs((prev) => ({ ...prev, [res.log.date]: res.log }));
     }
+    if (res.error) {
+      throw new Error(res.error);
+    }
   };
+
 
   // Delete ride log entry
   const handleDeleteRideLog = async (dateStr: string) => {
@@ -531,7 +535,13 @@ export default function App() {
         syncStatus={syncStatus}
         userEmail={userEmail}
         onOpenSidebar={() => setIsSidebarOpen(true)}
+        onNavigateHome={() => {
+          setShowWizard(false);
+          setActiveTab('calendar');
+          setIsCalendarExpanded(false);
+        }}
       />
+
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-8">

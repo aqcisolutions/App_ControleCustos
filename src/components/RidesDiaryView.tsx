@@ -272,8 +272,21 @@ export const RidesDiaryView: React.FC<RidesDiaryViewProps> = ({
         notes: notesInput.trim() || undefined,
       });
 
-      setSaveSuccessMsg(`Registro de ${formatDateBR(dateInput)} salvo com sucesso!`);
+      const savedDate = dateInput;
+
+      // Limpa automaticamente os campos do formulário para preparar novo registro somente após salvamento confirmado
+      setDateInput(todayStr);
+      setPlatformInput('ambas');
+      setKmInput('');
+      setHoursInput('8');
+      setMinutesInput('0');
+      setRidesInput('');
+      setGrossInput('');
+      setFuelInput('');
+      setNotesInput('');
       setEditingId(null);
+
+      setSaveSuccessMsg(`Registro de ${formatDateBR(savedDate)} salvo com sucesso!`);
 
       // Auto dismiss success message after 4s
       setTimeout(() => {
@@ -282,8 +295,10 @@ export const RidesDiaryView: React.FC<RidesDiaryViewProps> = ({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao salvar registro de corridas';
       setSaveErrorMsg(msg);
+      // Os campos digitados são preservados intactos em caso de erro para permitir nova tentativa
     }
   };
+
 
   // History entries sorted
   const sortedHistoryEntries = useMemo(() => {
