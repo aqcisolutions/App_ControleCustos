@@ -92,12 +92,20 @@ export const DayDetailsModal: React.FC<DayDetailsModalProps> = ({
                 {daySchedule.isWorkDay ? '💼 Dia de Trabalho' : '😴 Dia de Folga / Descanso'}
               </span>
 
-              {daySchedule.hasClosure && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              {daySchedule.closureStatus === 'full' && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  Fechamento Salvo
+                  Fechamento Completo
                 </span>
               )}
+
+              {daySchedule.closureStatus === 'partial' && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                  Fechamento Parcial
+                </span>
+              )}
+
             </div>
 
             <h3 className="text-xl font-bold text-slate-100 capitalize">{formattedDate}</h3>

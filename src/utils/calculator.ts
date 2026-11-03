@@ -431,6 +431,23 @@ export function calculateDaySchedule(
     }
   }
 
+  const hasClosure = !!closure && closure.completed;
+  let closureStatus: DayCalculation['closureStatus'] = 'none';
+
+  if (hasClosure) {
+    if (billTargets.length === 0) {
+      // No active bill reservations scheduled for this day, closure is complete
+      closureStatus = 'full';
+    } else {
+      // Considers strictly the bills active and planned for this day
+      const hasAnyNotSaved = billTargets.some((bt) => {
+        const st = closure.billsStatus?.[bt.billId];
+        return !st || st.saved === false;
+      });
+      closureStatus = hasAnyNotSaved ? 'partial' : 'full';
+    }
+  }
+
   return {
     date: dateStr,
     isWorkDay: workDay,
@@ -438,7 +455,9 @@ export function calculateDaySchedule(
     billTargets,
     upcomingBills,
     totalDayTarget: Math.round(totalDayTarget * 100) / 100,
-    hasClosure: !!closure && closure.completed,
+    hasClosure,
+    closureStatus,
     closure,
   };
 }
+

@@ -55,6 +55,8 @@ export interface BillReserveCalculation {
   isInitialCycle?: boolean;
 }
 
+export type DayClosureStatus = 'full' | 'partial' | 'none';
+
 export interface DayCalculation {
   date: string; // YYYY-MM-DD
   isWorkDay: boolean;
@@ -78,8 +80,10 @@ export interface DayCalculation {
   }[];
   totalDayTarget: number;
   hasClosure: boolean;
+  closureStatus: DayClosureStatus;
   closure?: DailyClosure;
 }
+
 
 // --- Diário de Corridas Types ---
 export type RidePlatform = 'uber' | '99' | 'ambas';

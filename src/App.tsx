@@ -65,7 +65,9 @@ import {
   Clock,
   Bell,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
+
 
 export default function App() {
   const [bills, setBills] = useState<Bill[]>(() => loadLocalBills());
@@ -813,36 +815,56 @@ export default function App() {
                         </span>
                         <div
                           className={`p-1.5 rounded-lg ${
-                            todaySchedule.hasClosure
+                            todaySchedule.closureStatus === 'full'
                               ? 'bg-emerald-500/15 text-emerald-400'
-                              : 'bg-amber-500/15 text-amber-400'
+                              : todaySchedule.closureStatus === 'partial'
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : 'bg-slate-800 text-slate-400'
                           }`}
                         >
-                          {todaySchedule.hasClosure ? (
+                          {todaySchedule.closureStatus === 'full' && (
                             <CheckCircle2 className="w-4 h-4" />
-                          ) : (
+                          )}
+                          {todaySchedule.closureStatus === 'partial' && (
+                            <AlertCircle className="w-4 h-4" />
+                          )}
+                          {todaySchedule.closureStatus === 'none' && (
                             <Clock className="w-4 h-4" />
                           )}
                         </div>
                       </div>
 
                       <div>
-                        {todaySchedule.hasClosure ? (
+                        {todaySchedule.closureStatus === 'full' && (
                           <>
                             <div className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
                               <CheckCircle2 className="w-4 h-4" />
-                              <span>Fechamento realizado</span>
+                              <span>Fechamento realizado (Completo)</span>
                             </div>
                             <p className="text-xs text-slate-400 mt-1">
                               {todayClosure && todayReservedAmount > 0
-                                ? `${formatCurrency(todayReservedAmount)} guardado na reserva (SIM)`
-                                : 'Fechamento salvo sem adicionar reserva (NÃO)'}
+                                ? `${formatCurrency(todayReservedAmount)} guardado na reserva (todas as contas)`
+                                : 'Fechamento concluído com sucesso'}
                             </p>
                           </>
-                        ) : (
+                        )}
+                        {todaySchedule.closureStatus === 'partial' && (
                           <>
                             <div className="text-sm font-bold text-amber-400 flex items-center gap-1.5">
-                              <Clock className="w-4 h-4" />
+                              <AlertCircle className="w-4 h-4" />
+                              <span>Fechamento realizado (Parcial)</span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {todayClosure && todayReservedAmount > 0
+                                ? `${formatCurrency(todayReservedAmount)} guardado • Contas NÃO redistribuídas`
+                                : 'Fechamento salvo sem reservas • Valores redistribuídos'}
+                            </p>
+                          </>
+                        )}
+                        {todaySchedule.closureStatus === 'none' && (
+                          <>
+                            <div className="text-sm font-bold text-slate-400 flex items-center gap-1.5">
+                              <Clock className="w-4 h-4 text-slate-500" />
                               <span>Fechamento ainda não realizado</span>
                             </div>
                             <p className="text-xs text-slate-400 mt-1">
@@ -851,6 +873,7 @@ export default function App() {
                           </>
                         )}
                       </div>
+
 
                       <div className="mt-3 pt-3 border-t border-slate-800/80">
                         <button

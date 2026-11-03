@@ -14,7 +14,9 @@ import {
   BedDouble,
   Briefcase,
   SlidersHorizontal,
+  AlertCircle,
 } from 'lucide-react';
+
 import { Bill, WorkSchedule, DailyClosure } from '../types';
 import {
   formatCurrency,
@@ -384,12 +386,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         </span>
                       )}
 
-                      {hasClosure && (
+                      {dayData.closureStatus === 'full' && (
                         <span
-                          title="Fechamento do dia registrado"
+                          title="Fechamento Completo: todas as reservas realizadas"
                           className="p-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]"
                         >
                           <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        </span>
+                      )}
+
+                      {dayData.closureStatus === 'partial' && (
+                        <span
+                          title="Fechamento Parcial: uma ou mais reservas foram adiadas"
+                          className="p-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px]"
+                        >
+                          <AlertCircle className="w-3 h-3 text-amber-400" />
                         </span>
                       )}
                     </div>
@@ -442,13 +453,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Fechamento Salvo</span>
+                <span>Fechamento Completo</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Fechamento Parcial</span>
               </div>
             </div>
             <div className="text-[11px] text-slate-500 italic">
               Toque em qualquer dia para ver os detalhes completos.
             </div>
           </div>
+
         </div>
       )}
 
@@ -486,11 +502,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             Hoje
                           </span>
                         )}
-                        {hasClosure && (
-                          <span title="Fechamento Salvo">
+                        {dayData.closureStatus === 'full' && (
+                          <span title="Fechamento Completo: todas as reservas realizadas">
                             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                           </span>
                         )}
+                        {dayData.closureStatus === 'partial' && (
+                          <span title="Fechamento Parcial: uma ou mais reservas foram adiadas">
+                            <AlertCircle className="w-4 h-4 text-amber-400" />
+                          </span>
+                        )}
+
                         {hasBillsDue && (
                           <span title="Vencimento de contas">
                             <Bell className="w-4 h-4 text-amber-400" />
@@ -633,10 +655,24 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
                 Fechamento Registrado
               </span>
-              <div className="text-2xl font-black text-slate-100 font-mono mt-1">
-                {currentDayClosure
-                  ? formatCurrency(currentDayClosure.grossEarnings)
-                  : 'Pendente'}
+              <div className="text-xl sm:text-2xl font-black text-slate-100 font-mono mt-1 flex items-center gap-2 flex-wrap">
+                <span>
+                  {currentDayClosure
+                    ? formatCurrency(currentDayClosure.grossEarnings)
+                    : 'Pendente'}
+                </span>
+                {currentDayData.closureStatus === 'full' && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-sans">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Completo
+                  </span>
+                )}
+                {currentDayData.closureStatus === 'partial' && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 font-sans">
+                    <AlertCircle className="w-3 h-3" />
+                    Parcial
+                  </span>
+                )}
               </div>
               <span className="text-xs text-slate-500 mt-1 block">
                 {currentDayClosure
@@ -644,6 +680,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   : 'Nenhum fechamento salvo ainda'}
               </span>
             </div>
+
 
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
