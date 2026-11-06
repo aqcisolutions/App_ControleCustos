@@ -95,16 +95,28 @@ export const DailyClosureView: React.FC<DailyClosureViewProps> = ({
     return sum;
   }, 0);
 
-  // Calculate total reserved across all accounts prior to this closure date
-  const totalPriorReserved = bills.reduce((sum, b) => {
-    let billPrior = b.initialAccumulated || 0;
+  // Calculate total reserved across all accounts prior to this closure date strictly within their active cycles
+  const totalPriorReserved = daySchedule.billTargets.reduce((sum, bt) => {
+    const fullBill = bills.find((b) => b.id === bt.billId);
+    const initialAcc = bt.isInitialCycle ? (fullBill?.initialAccumulated || 0) : 0;
+    const cycleStart = bt.cycleStart || '';
+    const cycleEnd = bt.cycleEnd || '';
+    let otherClosuresReserved = 0;
     Object.entries(closures).forEach(([d, cl]) => {
-      if (d !== selectedDate && cl.completed && cl.billsStatus?.[b.id]?.saved) {
-        const st = cl.billsStatus[b.id];
-        billPrior += (st.actualAmount !== undefined && st.actualAmount > 0 ? st.actualAmount : st.targetAmount);
+      if (
+        d !== selectedDate &&
+        cycleStart &&
+        cycleEnd &&
+        d >= cycleStart &&
+        d <= cycleEnd &&
+        cl.completed &&
+        cl.billsStatus?.[bt.billId]?.saved
+      ) {
+        const st = cl.billsStatus[bt.billId];
+        otherClosuresReserved += (st.actualAmount !== undefined && st.actualAmount > 0 ? st.actualAmount : st.targetAmount);
       }
     });
-    return sum + billPrior;
+    return sum + initialAcc + otherClosuresReserved;
   }, 0);
 
   // Net remaining after fuel and reserves
@@ -453,11 +465,21 @@ export const DailyClosureView: React.FC<DailyClosureViewProps> = ({
                 const decision = billDecisions[bt.billId] || { saved: true, customAmount: bt.targetAmount };
                 const fullBill = bills.find((b) => b.id === bt.billId);
 
-                // Calculate exact prior reserved amount before this day's closure
-                const initialAcc = fullBill?.initialAccumulated || 0;
+                // Calculate exact prior reserved amount before this day's closure strictly within this bill's active cycle
+                const initialAcc = bt.isInitialCycle ? (fullBill?.initialAccumulated || 0) : 0;
+                const cycleStart = bt.cycleStart || '';
+                const cycleEnd = bt.cycleEnd || '';
                 let otherClosuresReserved = 0;
                 Object.entries(closures).forEach(([d, cl]) => {
-                  if (d !== selectedDate && cl.completed && cl.billsStatus?.[bt.billId]?.saved) {
+                  if (
+                    d !== selectedDate &&
+                    cycleStart &&
+                    cycleEnd &&
+                    d >= cycleStart &&
+                    d <= cycleEnd &&
+                    cl.completed &&
+                    cl.billsStatus?.[bt.billId]?.saved
+                  ) {
                     const st = cl.billsStatus[bt.billId];
                     otherClosuresReserved += (st.actualAmount !== undefined && st.actualAmount > 0 ? st.actualAmount : st.targetAmount);
                   }

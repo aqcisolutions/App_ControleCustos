@@ -251,12 +251,29 @@ export function calculateBillDailyMap(
   const remainingAmount = Math.max(0, Math.round((bill.amount - alreadyReservedSum) * 100) / 100);
 
   const todayStr = getTodayStr();
-  const remainingWorkDays = workDays.filter(
-    (d) => d >= todayStr && (!closures[d]?.completed || d === todayStr)
-  );
 
-  // If a past day was marked NÃO, the shortfall is redistributed across remaining work days.
-  // Otherwise, each working day receives the exact equal baseDailyQuota!
+  // Distinguir se o ciclo está em andamento (no presente real do motorista),
+  // se é um ciclo futuro ou um ciclo já concluído no passado:
+  const isCurrentActiveCycle = todayStr >= cycleStart && todayStr <= cycleEnd;
+  const isFutureCycle = todayStr < cycleStart;
+
+  let remainingWorkDays: string[];
+  if (isCurrentActiveCycle) {
+    // Ciclo em andamento: dias de trabalho a partir de hoje até cycleEnd absorvem déficits
+    remainingWorkDays = workDays.filter(
+      (d) => d >= todayStr && (!closures[d]?.completed || d === todayStr)
+    );
+  } else if (isFutureCycle) {
+    // Ciclo futuro: todos os dias de trabalho previstos estarão disponíveis
+    remainingWorkDays = workDays;
+  } else {
+    // Ciclo encerrado: ciclo já finalizou em cycleEnd, zero dias restantes
+    remainingWorkDays = [];
+  }
+
+  // Se um dia deste ciclo foi marcado como NÃO, o valor é redistribuído
+  // exclusivamente entre os dias úteis restantes deste ciclo.
+  // Em ciclos futuros, ciclos encerrados ou ciclos sem déficit, cada dia útil recebe a cota base integral equilibrada.
   const dynamicTarget = (hasDeficitFromNao && remainingWorkDays.length > 0)
     ? Math.round((remainingAmount / remainingWorkDays.length) * 100) / 100
     : baseDailyQuota;
@@ -264,7 +281,7 @@ export function calculateBillDailyMap(
   const dailyTargets: Record<string, number> = {};
 
   for (const dayStr of workDays) {
-    // If day is strictly before cycleStart, target is 0
+    // Se o dia for estritamente anterior a cycleStart, a cota é 0
     if (dayStr < cycleStart) {
       dailyTargets[dayStr] = 0;
       continue;
@@ -275,7 +292,7 @@ export function calculateBillDailyMap(
 
     if (closure?.completed && billStatus) {
       dailyTargets[dayStr] = billStatus.targetAmount || baseDailyQuota;
-    } else if (dayStr >= todayStr) {
+    } else if (isCurrentActiveCycle && dayStr >= todayStr) {
       dailyTargets[dayStr] = dynamicTarget;
     } else {
       dailyTargets[dayStr] = baseDailyQuota;
@@ -308,13 +325,13 @@ export function calculateAllBillsProgress(
   closures: Record<string, DailyClosure>,
   refDate: Date = new Date()
 ): BillReserveCalculation[] {
-  const todayStr = getTodayStr();
-  const today = parseDate(todayStr);
+  const targetDateStr = formatDateToISO(refDate);
+  const targetDate = parseDate(targetDateStr);
 
   return bills.map((bill) => {
-    // Determine the relevant cycle for today (or initial start if before period)
-    const cycleInfo = getBillCycle(bill, today);
-    let evalDate = today;
+    // Determine the relevant cycle for targetDate (or initial start if before period)
+    const cycleInfo = getBillCycle(bill, targetDate);
+    let evalDate = targetDate;
     if (cycleInfo.isBeforePeriod) {
       evalDate = parseDate(cycleInfo.cycleStart);
     } else if (cycleInfo.isAfterPeriod) {
@@ -323,16 +340,16 @@ export function calculateAllBillsProgress(
 
     const calc = calculateBillDailyMap(bill, schedule, closures, evalDate);
     const dueDate = parseDate(calc.cycleEnd);
-    const diffTime = dueDate.getTime() - today.getTime();
+    const diffTime = dueDate.getTime() - targetDate.getTime();
     const daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    const startDiff = parseDate(calc.cycleStart).getTime() - today.getTime();
+    const startDiff = parseDate(calc.cycleStart).getTime() - targetDate.getTime();
     const daysUntilPeriodStart = Math.max(0, Math.ceil(startDiff / (1000 * 60 * 60 * 24)));
 
-    // For today: if today is before the period starts or after non-recurring bill period, target is 0
+    // For target date: if before period starts or after non-recurring bill period, target is 0
     const currentDailyTarget = (cycleInfo.isBeforePeriod || cycleInfo.isAfterPeriod)
       ? 0
-      : (calc.dailyTargets[todayStr] ?? calc.baseDailyQuota);
+      : (calc.dailyTargets[targetDateStr] ?? calc.baseDailyQuota);
 
     return {
       bill,
